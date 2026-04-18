@@ -80,6 +80,19 @@ func (api *Router) GetCoverArt(w http.ResponseWriter, r *http.Request) (*respons
 	}
 
 	defer imgReader.Close()
+	if ar, ok := imgReader.(interface {
+		AccelRedirect(prefix string) (string, bool)
+	}); ok {
+		if redirect, ok := ar.AccelRedirect(conf.Server.CacheAccelRedirectPrefix); ok {
+			w.Header().Set("cache-control", "public, max-age=315360000")
+			w.Header().Set("last-modified", lastUpdate.Format(http.TimeFormat))
+			if contentType := detectImageContentType(imgReader); contentType != "" {
+				w.Header().Set("content-type", contentType)
+			}
+			w.Header().Set("X-Accel-Redirect", redirect)
+			return nil, nil
+		}
+	}
 	w.Header().Set("cache-control", "public, max-age=315360000")
 	w.Header().Set("last-modified", lastUpdate.Format(http.TimeFormat))
 
@@ -89,6 +102,22 @@ func (api *Router) GetCoverArt(w http.ResponseWriter, r *http.Request) (*respons
 	}
 
 	return nil, err
+}
+
+func detectImageContentType(r io.Reader) string {
+	var buf [512]byte
+	n, err := r.Read(buf[:])
+	if seeker, ok := r.(io.Seeker); ok {
+		_, _ = seeker.Seek(0, io.SeekStart)
+	}
+	if n == 0 || (err != nil && err != io.EOF) {
+		return ""
+	}
+	contentType := http.DetectContentType(buf[:n])
+	if contentType == "application/octet-stream" && n >= 12 && string(buf[0:4]) == "RIFF" && string(buf[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	return contentType
 }
 
 func (api *Router) GetLyrics(r *http.Request) (*responses.Subsonic, error) {

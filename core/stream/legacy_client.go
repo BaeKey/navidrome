@@ -58,11 +58,12 @@ func (s *deciderService) ResolveRequest(ctx context.Context, mf *model.MediaFile
 	var req Request
 	req.Offset = offset
 
-	if reqFormat == "raw" {
+	if reqFormat == "raw" && !AudioOutputEnabled() {
 		req.Format = "raw"
 		return req
 	}
 
+	reqFormat, reqBitRate = ApplyAudioOutput(reqFormat, reqBitRate)
 	clientInfo := buildLegacyClientInfo(mf, reqFormat, reqBitRate)
 
 	// Apply server-side player transcoding override before making the decision
@@ -79,7 +80,7 @@ func (s *deciderService) ResolveRequest(ctx context.Context, mf *model.MediaFile
 
 	decision, err := s.MakeDecision(ctx, mf, clientInfo, TranscodeOptions{SkipProbe: true})
 	if err != nil {
-		log.Error(ctx, "Error making transcode decision, falling back to raw", "id", mf.ID, err)
+		log.Error(ctx, "Error making transcode decision", "id", mf.ID, err)
 		req.Format = "raw"
 		return req
 	}

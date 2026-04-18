@@ -144,5 +144,6 @@ func (s *deciderService) ResolveRequestFromToken(ctx context.Context, token stri
 		req.BitDepth = p.TargetBitDepth
 		req.Channels = p.TargetChannels
 	}
+	req.Format, req.BitRate = ApplyAudioOutput(req.Format, req.BitRate)
 	return req, nil
 }

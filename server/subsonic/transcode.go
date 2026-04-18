@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/navidrome/navidrome/conf"
 	"github.com/navidrome/navidrome/core/stream"
 	"github.com/navidrome/navidrome/log"
 	"github.com/navidrome/navidrome/model"
@@ -277,6 +278,7 @@ func (api *Router) GetTranscodeDecision(w http.ResponseWriter, r *http.Request) 
 		}
 		return stream.IsAACCodec(p.Container)
 	})
+	clientInfo = stream.ApplyAudioOutputToClientInfo(clientInfo)
 
 	// Get media file
 	mf, err := api.ds.MediaFile(ctx).Get(mediaID)
@@ -395,6 +397,11 @@ func (api *Router) GetTranscodeStream(w http.ResponseWriter, r *http.Request) (*
 	}()
 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if redirect, ok := stream.AccelRedirect(conf.Server.CacheAccelRedirectPrefix); ok {
+		w.Header().Set("Content-Type", stream.ContentType())
+		w.Header().Set("X-Accel-Redirect", redirect)
+		return nil, nil
+	}
 
 	n, err := stream.Serve(ctx, w, r)
 	if err != nil || n == 0 {

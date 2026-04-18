@@ -22,6 +22,10 @@ import (
 	"github.com/navidrome/navidrome/utils/req"
 )
 
+type accelRedirecter interface {
+	AccelRedirect(prefix string) (string, bool)
+}
+
 type MediaStreamer interface {
 	NewStream(ctx context.Context, mf *model.MediaFile, req Request) (*Stream, error)
 }
@@ -64,6 +68,8 @@ func (j *streamJob) Key() string {
 // and transcoded streaming based on the requested format and bitrate. It also logs detailed information about
 // the streaming request and whether the transcoding result was served from cache or not.
 func (ms *mediaStreamer) NewStream(ctx context.Context, mf *model.MediaFile, req Request) (*Stream, error) {
+	req = ApplyAudioOutputToRequest(req)
+
 	var format string
 	var bitRate int
 	var cached bool
@@ -146,6 +152,13 @@ func (s *Stream) Duration() float32   { return s.mf.Duration }
 func (s *Stream) ContentType() string { return mime.TypeByExtension("." + s.format) }
 func (s *Stream) Name() string        { return s.mf.Title + "." + s.format }
 func (s *Stream) ModTime() time.Time  { return s.mf.UpdatedAt }
+func (s *Stream) AccelRedirect(prefix string) (string, bool) {
+	if ar, ok := s.ReadCloser.(accelRedirecter); ok {
+		return ar.AccelRedirect(prefix)
+	}
+	return "", false
+}
+
 func (s *Stream) EstimatedContentLength() int {
 	return int(s.mf.Duration * float32(s.bitRate) / 8 * 1024)
 }
@@ -238,20 +251,13 @@ func NewTranscodingCache() TranscodingCache {
 				return nil, err
 			}
 
-			// Choose the context that drives the ffmpeg process.
-			//
-			// When the limiter is enabled, force the request context so a
-			// client disconnect cancels ffmpeg and frees the slot promptly.
-			// Otherwise a client could open many transcodes, disconnect
-			// immediately, and still leave the configured cap's worth of
-			// ffmpeg processes draining in the background — which is exactly
-			// the DoS the limiter is meant to prevent.
-			//
-			// When the limiter is disabled, preserve the legacy behavior
-			// governed by Transcoding.EnableCancellation so unchanged configs
-			// keep their previous observable behavior.
+			// Choose the context that drives the ffmpeg process. When global
+			// audio output is used with an accel-redirect cache, finish the
+			// canonical cache file even if the first client disconnects.
 			var transcodingCtx context.Context
-			if job.ms.limiter.Enabled() || conf.Server.Transcoding.EnableCancellation {
+			if AudioOutputEnabled() && conf.Server.CacheAccelRedirectPrefix != "" {
+				transcodingCtx = request.AddValues(context.Background(), ctx)
+			} else if job.ms.limiter.Enabled() || conf.Server.Transcoding.EnableCancellation {
 				transcodingCtx = ctx
 			} else {
 				transcodingCtx = request.AddValues(context.Background(), ctx)

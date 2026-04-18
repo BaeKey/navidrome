@@ -99,12 +99,16 @@ func (sfs *spreadFS) RemoveAll() error {
 }
 
 func (sfs *spreadFS) KeyMapper(key string) string {
+	return mapCacheKeyToPath(sfs.root, key)
+}
+
+func mapCacheKeyToPath(root, key string) string {
 	// When running the Haunter, fscache can call this KeyMapper with the cached filepath instead of the key.
 	// That's because we don't inform the original cache keys when reloading in the Reload function above.
 	// If that's the case, just return the file path, as it is the actual mapped key.
-	if strings.HasPrefix(key, sfs.root) {
+	if strings.HasPrefix(key, root) {
 		return key
 	}
 	hash := fmt.Sprintf("%x", sha1.Sum([]byte(key)))
-	return filepath.Join(sfs.root, hash[0:2], hash[2:4], hash)
+	return filepath.Join(root, hash[0:2], hash[2:4], hash)
 }

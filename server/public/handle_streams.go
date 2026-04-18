@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/navidrome/navidrome/conf"
 	"github.com/navidrome/navidrome/core/auth"
 	streampkg "github.com/navidrome/navidrome/core/stream"
 	"github.com/navidrome/navidrome/log"
@@ -48,8 +49,9 @@ func (pub *Router) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	format, bitRate := streampkg.ApplyAudioOutput(info.format, info.bitrate)
 	stream, err := pub.streamer.NewStream(ctx, mf, streampkg.Request{
-		Format: info.format, BitRate: info.bitrate,
+		Format: format, BitRate: bitRate,
 	})
 	if err != nil {
 		if errors.Is(err, streampkg.ErrTooManyTranscodes) {
@@ -71,6 +73,11 @@ func (pub *Router) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Content-Duration", strconv.FormatFloat(float64(stream.Duration()), 'G', -1, 32))
+	if redirect, ok := stream.AccelRedirect(conf.Server.CacheAccelRedirectPrefix); ok {
+		w.Header().Set("Content-Type", stream.ContentType())
+		w.Header().Set("X-Accel-Redirect", redirect)
+		return
+	}
 
 	n, err := stream.Serve(ctx, w, r)
 	if err != nil || n == 0 {

@@ -104,6 +104,26 @@ var _ = Describe("File Caches", func() {
 			Expect(called).To(BeTrue())
 		})
 
+		It("exposes a stable internal redirect path for completed cache hits", func() {
+			fc := callNewFileCache("test", "1KB", "transcoding", 0, func(ctx context.Context, arg Item) (io.Reader, error) {
+				return strings.NewReader(arg.Key()), nil
+			})
+
+			s, err := fc.Get(context.Background(), &testArg{"stream-key"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(io.ReadAll(s)).To(Equal([]byte("stream-key")))
+
+			s, err = fc.Get(context.Background(), &testArg{"stream-key"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s.Cached).To(BeTrue())
+			Expect(s.Complete).To(BeTrue())
+			Expect(s.RelativePath).To(Equal(fc.relativePath("stream-key")))
+
+			redirect, ok := s.AccelRedirect("/_cache")
+			Expect(ok).To(BeTrue())
+			Expect(redirect).To(Equal("/_cache/" + fc.relativePath("stream-key")))
+		})
+
 		Context("reader errors", func() {
 			When("creating a reader fails", func() {
 				It("does not cache", func() {
