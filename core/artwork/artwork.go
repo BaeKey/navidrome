@@ -39,6 +39,13 @@ func representationTag(hash string, size int, square bool) string {
 	return fmt.Sprintf("%s.%d.%v.%s", hash, size, square, formatQualityTag())
 }
 
+func applyConfiguredArtworkOutput(size int, square bool) (int, bool) {
+	if conf.Server.ArtworkSize > 0 {
+		return conf.Server.ArtworkSize, conf.Server.ArtworkSquare
+	}
+	return size, square
+}
+
 type Artwork interface {
 	// Get returns ErrUnavailable when there is nothing to serve and model.ErrNotFound when
 	// the id resolves to nothing, so the caller can pick placeholder vs 404.
@@ -102,6 +109,8 @@ func (s *service) GetOrPlaceholder(ctx context.Context, id string, size int, squ
 }
 
 func (s *service) Get(ctx context.Context, artID model.ArtworkID, size int, square bool) (*Image, error) {
+	size, square = applyConfiguredArtworkOutput(size, square)
+
 	if artID.ID == "" {
 		return nil, ErrUnavailable
 	}

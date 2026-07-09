@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -119,6 +121,22 @@ type fileCache struct {
 	mutex       *sync.RWMutex
 }
 
+func (fc *fileCache) rootPath() string {
+	return filepath.Join(conf.Server.CacheFolder.MustPath(), fc.cacheFolder)
+}
+
+func (fc *fileCache) mappedPath(key string) string {
+	return mapCacheKeyToPath(fc.rootPath(), key)
+}
+
+func (fc *fileCache) relativePath(key string) string {
+	relativePath, err := filepath.Rel(conf.Server.CacheFolder.MustPath(), fc.mappedPath(key))
+	if err != nil {
+		return ""
+	}
+	return filepath.ToSlash(relativePath)
+}
+
 func (fc *fileCache) Available(_ context.Context) bool {
 	fc.mutex.RLock()
 	defer fc.mutex.RUnlock()
@@ -195,14 +213,17 @@ func (fc *fileCache) Get(ctx context.Context, arg Item) (*CachedStream, error) {
 	// If it is in the cache, check if the stream is done being written. If so, return a ReadSeeker
 	if cached {
 		size := getFinalCachedSize(r)
-		if size >= 0 {
+		completeExists := fileExists(fc.mappedPath(key) + completeMarkerSuffix)
+		if size >= 0 && completeExists {
 			log.Trace(ctx, "Cache HIT", "cache", fc.name, "key", key, "size", size)
 			sr := io.NewSectionReader(r, 0, size)
 			return &CachedStream{
-				Reader: sr,
-				Seeker: sr,
-				Closer: r,
-				Cached: true,
+				Reader:       sr,
+				Seeker:       sr,
+				Closer:       r,
+				Cached:       true,
+				Complete:     true,
+				RelativePath: fc.relativePath(key),
 			}, nil
 		} else {
 			log.Trace(ctx, "Cache HIT", "cache", fc.name, "key", key)
@@ -218,7 +239,9 @@ type CachedStream struct {
 	io.Reader
 	io.Seeker
 	io.Closer
-	Cached bool
+	Cached       bool
+	Complete     bool
+	RelativePath string
 }
 
 func (s *CachedStream) Close() error {
@@ -229,6 +252,20 @@ func (s *CachedStream) Close() error {
 		return c.Close()
 	}
 	return nil
+}
+
+func (s *CachedStream) AccelRedirect(prefix string) (string, bool) {
+	if prefix == "" || !s.Cached || !s.Complete || s.RelativePath == "" {
+		return "", false
+	}
+	return path.Join("/", prefix, s.RelativePath), true
+}
+
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+	return false
 }
 
 func getFinalCachedSize(r fscache.ReadAtCloser) int64 {

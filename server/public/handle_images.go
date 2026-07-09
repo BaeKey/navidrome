@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/navidrome/navidrome/conf"
 	"github.com/navidrome/navidrome/core/artwork"
 	"github.com/navidrome/navidrome/core/auth"
 	"github.com/navidrome/navidrome/log"
@@ -67,10 +68,37 @@ func (pub *Router) handleImages(w http.ResponseWriter, r *http.Request) {
 	if imghttp.WriteImageHeaders(w, r, img, artId.Hash) {
 		return
 	}
+	if ar, ok := img.ReadCloser.(interface {
+		AccelRedirect(prefix string) (string, bool)
+	}); ok {
+		if redirect, ok := ar.AccelRedirect(conf.Server.CacheAccelRedirectPrefix); ok {
+			if contentType := detectImageContentType(img.ReadCloser); contentType != "" {
+				w.Header().Set("Content-Type", contentType)
+				w.Header().Set("X-Accel-Redirect", redirect)
+				return
+			}
+		}
+	}
 	cnt, err := io.Copy(w, img)
 	if err != nil {
 		log.Warn(ctx, "Error sending image", "count", cnt, err)
 	}
+}
+
+func detectImageContentType(r io.Reader) string {
+	var buf [512]byte
+	n, err := r.Read(buf[:])
+	if seeker, ok := r.(io.Seeker); ok {
+		_, _ = seeker.Seek(0, io.SeekStart)
+	}
+	if n == 0 || (err != nil && err != io.EOF) {
+		return ""
+	}
+	contentType := http.DetectContentType(buf[:n])
+	if contentType == "application/octet-stream" && n >= 12 && string(buf[0:4]) == "RIFF" && string(buf[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	return contentType
 }
 
 func decodeArtworkID(tokenString string) (model.ArtworkID, error) {

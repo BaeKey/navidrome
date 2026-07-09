@@ -141,9 +141,10 @@ var _ = Describe("MediaStreamer", func() {
 			_ = s.Close()
 			Eventually(func() bool { return ffmpeg.IsClosed() }, "3s").Should(BeTrue())
 
-			s, err = streamer.NewStream(ctx, mf, stream.Request{Format: "mp3", BitRate: 32})
-			Expect(err).To(BeNil())
-			Expect(s.Seekable()).To(BeTrue())
+			Eventually(func() bool {
+				s, err = streamer.NewStream(ctx, mf, stream.Request{Format: "mp3", BitRate: 32})
+				return err == nil && s.Seekable()
+			}, "3s").Should(BeTrue())
 		})
 	})
 

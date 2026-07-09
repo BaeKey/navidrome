@@ -47,6 +47,11 @@ func (api *Router) Stream(w http.ResponseWriter, r *http.Request) (*responses.Su
 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Content-Duration", strconv.FormatFloat(float64(stream.Duration()), 'G', -1, 32))
+	if redirect, ok := stream.AccelRedirect(conf.Server.CacheAccelRedirectPrefix); ok {
+		w.Header().Set("Content-Type", stream.ContentType())
+		w.Header().Set("X-Accel-Redirect", redirect)
+		return nil, nil
+	}
 
 	_, err = stream.Serve(ctx, w, r)
 	return nil, err
@@ -113,6 +118,11 @@ func (api *Router) Download(w http.ResponseWriter, r *http.Request) (*responses.
 		}()
 
 		w.Header().Set("Content-Disposition", str.ContentDispositionAttachment(stream.Name()))
+		if redirect, ok := stream.AccelRedirect(conf.Server.CacheAccelRedirectPrefix); ok {
+			w.Header().Set("Content-Type", stream.ContentType())
+			w.Header().Set("X-Accel-Redirect", redirect)
+			return nil, nil
+		}
 
 		_, err = stream.Serve(ctx, w, r)
 		return nil, err

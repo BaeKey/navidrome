@@ -62,10 +62,11 @@ func (s *deciderService) ResolveRequest(ctx context.Context, mf *model.MediaFile
 	var req Request
 	req.Offset = offset
 
-	if reqFormat == "raw" {
+	if reqFormat == "raw" && !AudioOutputEnabled() {
 		req.Format = "raw"
 		return req
 	}
+	reqFormat, reqBitRate = ApplyAudioOutput(reqFormat, reqBitRate)
 
 	playerMaxBitRate := 0
 	if player, ok := request.PlayerFrom(ctx); ok {
@@ -74,7 +75,7 @@ func (s *deciderService) ResolveRequest(ctx context.Context, mf *model.MediaFile
 
 	clientInfo := buildLegacyClientInfo(mf, reqFormat, reqBitRate, playerMaxBitRate)
 	if resolved, ok := s.resolve(ctx, mf, clientInfo, offset); ok {
-		return resolved
+		return ApplyAudioOutputToRequest(resolved)
 	}
 
 	// No compatible profile for the requested format — retry with DefaultDownsamplingFormat
@@ -94,10 +95,11 @@ func (s *deciderService) ResolveRequest(ctx context.Context, mf *model.MediaFile
 // ResolveClientRequest resolves a stream request for a client that declared its own direct play
 // and transcoding profiles, falling back to raw when none fits.
 func (s *deciderService) ResolveClientRequest(ctx context.Context, mf *model.MediaFile, clientInfo *ClientInfo, offset int) Request {
+	clientInfo = ApplyAudioOutputToClientInfo(clientInfo)
 	if req, ok := s.resolve(ctx, mf, clientInfo, offset); ok {
-		return req
+		return ApplyAudioOutputToRequest(req)
 	}
-	return Request{Format: "raw", Offset: offset}
+	return ApplyAudioOutputToRequest(Request{Format: "raw", Offset: offset})
 }
 
 // resolve applies the server-side player overrides to clientInfo and maps the decision to a

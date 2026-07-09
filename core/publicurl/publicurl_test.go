@@ -192,6 +192,14 @@ var _ = Describe("Public URL Utilities", func() {
 			Expect(result).To(ContainSubstring("size=300"))
 		})
 
+		It("uses the configured artwork size instead of the requested size", func() {
+			conf.Server.ArtworkSize = 1200
+			artID := model.NewArtworkID(model.KindAlbumArtwork, "album-1", nil)
+			result := publicurl.ImageURL(context.Background(), artID, 300)
+			Expect(result).To(ContainSubstring("size=1200"))
+			Expect(result).ToNot(ContainSubstring("size=300"))
+		})
+
 		It("omits size parameter when zero", func() {
 			artID := model.NewArtworkID(model.KindMediaFileArtwork, "track-1", nil)
 			result := publicurl.ImageURL(context.Background(), artID, 0)

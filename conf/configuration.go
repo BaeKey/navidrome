@@ -61,6 +61,9 @@ type configOptions struct {
 	EnableMediaFileCoverArt         bool
 	TranscodingCacheSize            string
 	ImageCacheSize                  string
+	ArtworkSize                     int
+	ArtworkSquare                   bool
+	CacheAccelRedirectPrefix        string
 	AlbumPlayCountMode              string
 	EnableArtworkPrecache           bool
 	AutoImportPlaylists             bool
@@ -69,6 +72,8 @@ type configOptions struct {
 	SmartPlaylistRefreshDelay       time.Duration
 	AutoTranscodeDownload           bool
 	DefaultDownsamplingFormat       string
+	AudioOutputFormat               string
+	AudioMaxBitRate                 int
 	Search                          searchOptions  `json:",omitzero"`
 	Matcher                         matcherOptions `json:",omitzero"`
 	RecentlyAddedByModTime          bool
@@ -985,6 +990,8 @@ func setViperDefaults() {
 	viper.SetDefault("enabletranscodingconfig", false)
 	viper.SetDefault("transcodingcachesize", "100MB")
 	viper.SetDefault("imagecachesize", "100MB")
+	viper.SetDefault("artworksize", 0)
+	viper.SetDefault("artworksquare", false)
 	viper.SetDefault("albumplaycountmode", consts.AlbumPlayCountModeAbsolute)
 	viper.SetDefault("enableartworkprecache", true)
 	viper.SetDefault("autoimportplaylists", true)
@@ -997,6 +1004,9 @@ func setViperDefaults() {
 	viper.SetDefault("enablemediafilecoverart", true)
 	viper.SetDefault("autotranscodedownload", false)
 	viper.SetDefault("defaultdownsamplingformat", consts.DefaultDownsamplingFormat)
+	viper.SetDefault("audiooutputformat", "")
+	viper.SetDefault("audiomaxbitrate", 0)
+	viper.SetDefault("cacheaccelredirectprefix", "")
 	viper.SetDefault("search.fullstring", false)
 	viper.SetDefault("search.backend", "fts")
 	viper.SetDefault("matcher.preferstarred", true)

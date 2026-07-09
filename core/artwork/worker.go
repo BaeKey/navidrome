@@ -314,12 +314,13 @@ func (w *Worker) precache(ctx context.Context, got *acquired) {
 		return
 	}
 	precacheStart := time.Now()
-	// Same key as the serving path: square must match what the list surfaces request, or this
-	// warms a key nothing reads.
+	// Same key as the serving path: use the global artwork output when configured, otherwise
+	// warm the UI's square representation.
+	size, square := applyConfiguredArtworkOutput(conf.Server.UICoverArtSize, true)
 	item := &resizedItem{
 		hash:   got.ia.Hash,
-		size:   conf.Server.UICoverArtSize,
-		square: true,
+		size:   size,
+		square: square,
 		ffmpeg: w.ffmpeg,
 		open:   func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(got.data)), nil },
 	}
@@ -330,8 +331,8 @@ func (w *Worker) precache(ctx context.Context, got *acquired) {
 	}
 	_, _ = io.Copy(io.Discard, stream)
 	_ = stream.Close()
-	log.Trace(ctx, "Artwork: Precached UI size", "kind", got.ia.ItemKind, "id", got.ia.ItemID,
-		"size", conf.Server.UICoverArtSize, "elapsed", time.Since(precacheStart))
+	log.Trace(ctx, "Artwork: Precached image", "kind", got.ia.ItemKind, "id", got.ia.ItemID,
+		"size", size, "square", square, "elapsed", time.Since(precacheStart))
 }
 
 // backoffFor returns min(5s×4^n, giveUpAfter) scaled by (1+jitter), with jitter in [-0.4, 0.4].

@@ -134,6 +134,22 @@ var _ = Describe("Artwork", func() {
 			}).Should(Succeed())
 		})
 
+		It("uses the configured artwork output instead of the requested size and shape", func() {
+			seedFoundStore("al", "alconfigured", coverBytes)
+			conf.Server.ArtworkSize = 100
+			conf.Server.ArtworkSquare = true
+
+			img, err := svc.Get(ctx, model.MustParseArtworkID("al-alconfigured"), 300, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(img.ETag).To(Equal(representationTag(img.Hash, 100, true)))
+
+			data := readAll(img)
+			cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Width).To(Equal(100))
+			Expect(cfg.Height).To(Equal(100))
+		})
+
 		It("treats a negative size as a full-size request, not a giant resize", func() {
 			seedFoundStore("al", "alneg", coverBytes)
 

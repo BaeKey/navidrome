@@ -37,10 +37,12 @@ type archiver struct {
 }
 
 func (a *archiver) ZipAlbum(ctx context.Context, id string, format string, bitrate int, out io.Writer) error {
+	format, bitrate = stream.ApplyAudioOutput(format, bitrate)
 	return a.zipAlbums(ctx, id, format, bitrate, out, squirrel.Eq{"album_id": id})
 }
 
 func (a *archiver) ZipArtist(ctx context.Context, id string, format string, bitrate int, out io.Writer) error {
+	format, bitrate = stream.ApplyAudioOutput(format, bitrate)
 	// Match by album-artist participation, not the deprecated album_artist_id
 	// column (first album artist only), so co-album-artists are included too.
 	filter := squirrel.And{
@@ -113,11 +115,13 @@ func (a *archiver) ZipShare(ctx context.Context, s *model.Share, out io.Writer) 
 	if !s.Downloadable {
 		return model.ErrNotAuthorized
 	}
+	format, bitrate := stream.ApplyAudioOutput(s.Format, s.MaxBitRate)
 	log.Debug(ctx, "Zipping share", "name", s.ID, "format", s.Format, "bitrate", s.MaxBitRate, "numTracks", len(s.Tracks))
-	return a.zipMediaFiles(ctx, s.ID, s.ID, s.Format, s.MaxBitRate, out, s.Tracks, false)
+	return a.zipMediaFiles(ctx, s.ID, s.ID, format, bitrate, out, s.Tracks, false)
 }
 
 func (a *archiver) ZipPlaylist(ctx context.Context, id string, format string, bitrate int, out io.Writer) error {
+	format, bitrate = stream.ApplyAudioOutput(format, bitrate)
 	pls, err := a.ds.Playlist(ctx).GetWithTracks(id, true, false)
 	if err != nil {
 		log.Error(ctx, "Error loading mediafiles from playlist", "id", id, err)
